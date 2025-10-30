@@ -266,6 +266,168 @@ async def get_facebook_ads_data_from_graph_api() -> list:
             continue
     return result
 
+async def get_facebook_ads_performance_from_graph_api() -> list:
+
+    accounts = get_active_ad_accounts()
+    result = []
+    
+    for account in accounts:
+        act_account_id = f"act_{account['account_id']}"
+        ad_account = AdAccount(act_account_id)
+        
+        try:
+            # Re-fetch campaigns (cursor was exhausted)
+            campaigns = ad_account.get_campaigns(
+                fields=[Campaign.Field.id, Campaign.Field.name],
+                params={'effective_status': ['ACTIVE']}
+            )
+            
+            for campaign in campaigns:
+                campaign_name = campaign[Campaign.Field.name]
+                
+                # Filter campaigns containing "DEYOO" or "MAGDY"
+                if keyword1 not in campaign_name and keyword2 not in campaign_name:
+                    continue
+
+                # Get insights for today (hourly updates need current data)
+                insights = Campaign(campaign[Campaign.Field.id]).get_insights(
+                    fields=[
+                        # Basic Info
+                        AdsInsights.Field.campaign_id,
+                        AdsInsights.Field.campaign_name,
+                        AdsInsights.Field.date_start,
+                        AdsInsights.Field.date_stop,
+                        
+                        # Spend & Budget
+                        AdsInsights.Field.spend,
+                        
+                        # Delivery Metrics
+                        AdsInsights.Field.impressions,
+                        AdsInsights.Field.reach,
+                        AdsInsights.Field.frequency,
+                        
+                        # Engagement Metrics
+                        AdsInsights.Field.clicks,
+                        AdsInsights.Field.unique_clicks,
+                        AdsInsights.Field.ctr,
+                        AdsInsights.Field.unique_ctr,
+                        AdsInsights.Field.cpc,
+                        AdsInsights.Field.cpm,
+                        AdsInsights.Field.cpp,
+                        
+                        # Conversion Metrics
+                        AdsInsights.Field.actions,
+                        AdsInsights.Field.action_values,
+                        AdsInsights.Field.cost_per_action_type,
+                    ], 
+                    params={
+                        'level': 'campaign',
+                        'breakdowns': ['country'],
+                        'date_preset': 'today',  # Changed to 'today' for hourly tracking
+                        'time_increment': 1 
+                    }
+                )
+                
+                for insight in insights:
+                    country_code = insight.get('country', 'Unknown')
+                    spend = float(insight.get('spend', 0))
+                    date = insight.get('date_stop', '')
+                    
+                    # Include all data (removed spend filter)
+                    
+                    # Extract conversion actions
+                    actions = insight.get('actions', [])
+                    conversions_dict = {
+                        action['action_type']: float(action['value']) 
+                        for action in actions
+                    }
+                    
+                    # Extract conversion values (revenue)
+                    action_values = insight.get('action_values', [])
+                    revenue_dict = {
+                        action['action_type']: float(action['value']) 
+                        for action in action_values
+                    }
+                    
+                    # Extract cost per action
+                    cost_per_actions = insight.get('cost_per_action_type', [])
+                    cpa_dict = {
+                        action['action_type']: float(action['value']) 
+                        for action in cost_per_actions
+                    }
+                    
+                    # Build result row
+                    row = {
+                        # Metadata
+                        'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        
+                        # Account & Campaign Info
+                        'account_id': account['account_id'],
+                        'account_name': account['account_name'],
+                        'campaign': campaign[Campaign.Field.name],
+                        'campaign_id': campaign[Campaign.Field.id],
+                        'country': country_code, 
+                        'date': date,
+                        
+                        # Spend
+                        'spend': spend,
+                        
+                        # Delivery Metrics
+                        'impressions': int(insight.get('impressions', 0)),
+                        'reach': int(insight.get('reach', 0)),
+                        'frequency': float(insight.get('frequency', 0)),
+                        
+                        # Click Metrics
+                        'clicks': int(insight.get('clicks', 0)),
+                        'unique_clicks': int(insight.get('unique_clicks', 0)),
+                        'ctr': float(insight.get('ctr', 0)),
+                        'unique_ctr': float(insight.get('unique_ctr', 0)),
+                        
+                        # Cost Metrics
+                        'cpc': float(insight.get('cpc', 0)),
+                        'cpm': float(insight.get('cpm', 0)),
+                        'cpp': float(insight.get('cpp', 0)),
+                        
+                        # Conversions
+                        'link_clicks': conversions_dict.get('link_click', 0),
+                        'post_engagements': conversions_dict.get('post_engagement', 0),
+                        'page_engagements': conversions_dict.get('page_engagement', 0),
+                        'post_reactions': conversions_dict.get('post_reaction', 0),
+                        'comments': conversions_dict.get('comment', 0),
+                        'shares': conversions_dict.get('post', 0),
+                        'video_views': conversions_dict.get('video_view', 0),
+                        
+                        # Purchase/Conversion Events
+                        'purchases': conversions_dict.get('omni_purchase', 0) or conversions_dict.get('purchase', 0),
+                        'add_to_cart': conversions_dict.get('omni_add_to_cart', 0) or conversions_dict.get('add_to_cart', 0),
+                        'initiate_checkout': conversions_dict.get('omni_initiated_checkout', 0) or conversions_dict.get('initiate_checkout', 0),
+                        'leads': conversions_dict.get('lead', 0),
+                        'complete_registration': conversions_dict.get('complete_registration', 0),
+                        
+                        # Revenue
+                        'purchase_value': revenue_dict.get('omni_purchase', 0) or revenue_dict.get('purchase', 0),
+                        
+                        # Cost Per Action
+                        'cost_per_purchase': cpa_dict.get('omni_purchase', 0) or cpa_dict.get('purchase', 0),
+                        'cost_per_lead': cpa_dict.get('lead', 0),
+                        'cost_per_add_to_cart': cpa_dict.get('omni_add_to_cart', 0) or cpa_dict.get('add_to_cart', 0),
+                    }
+                    
+                    # Calculate ROAS
+                    if row['purchase_value'] > 0 and spend > 0:
+                        row['roas'] = round(row['purchase_value'] / spend, 2)
+                    else:
+                        row['roas'] = 0
+                    
+                    result.append(row)
+                    
+        except Exception as e:
+            print(f"  ❌ Error fetching data for account {account['account_id']}: {e}")
+            continue
+    
+    print(f"  ✅ Extracted {len(result)} rows of data")
+    return result
+
 async def save_data_to_sqlite(data: list):
     print('saving data to sqlite')
     print("Current time (UTC-3):", datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-3))))
