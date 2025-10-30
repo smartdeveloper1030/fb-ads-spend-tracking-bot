@@ -270,18 +270,24 @@ async def get_facebook_ads_performance_from_graph_api() -> list:
 
     accounts = get_active_ad_accounts()
     result = []
-    
+    print(f"Fetching Facebook ads data for {len(accounts)} accounts...")
     for account in accounts:
         act_account_id = f"act_{account['account_id']}"
         ad_account = AdAccount(act_account_id)
         
         try:
-            # Re-fetch campaigns (cursor was exhausted)
+            # Filter campaigns with keywords
             campaigns = ad_account.get_campaigns(
-                fields=[Campaign.Field.id, Campaign.Field.name],
-                params={'effective_status': ['ACTIVE']}
+                fields=[
+                    Campaign.Field.id,
+                    Campaign.Field.name,
+                    Campaign.Field.status,
+                    Campaign.Field.effective_status
+                ],
+                params={
+                    'effective_status': ['ACTIVE']
+                }
             )
-            
             for campaign in campaigns:
                 campaign_name = campaign[Campaign.Field.name]
                 
@@ -289,6 +295,7 @@ async def get_facebook_ads_performance_from_graph_api() -> list:
                 if keyword1 not in campaign_name and keyword2 not in campaign_name:
                     continue
 
+                print(f"  Processing Campaign: {campaign_name} (ID: {campaign[Campaign.Field.id]})")
                 # Get insights for today (hourly updates need current data)
                 insights = Campaign(campaign[Campaign.Field.id]).get_insights(
                     fields=[
@@ -793,3 +800,8 @@ async def update_account_targeting_with_included_countries(included_counties: li
                 break
                 
     return
+
+if __name__ == "__main__":
+    result = asyncio.run(get_facebook_ads_performance_from_graph_api())
+    print('Final Result:')
+    print(result)
