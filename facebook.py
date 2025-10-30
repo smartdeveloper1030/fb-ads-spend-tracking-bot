@@ -228,8 +228,12 @@ async def get_facebook_ads_data_from_graph_api() -> list:
             campaigns = ad_account.get_campaigns(fields=[
                 Campaign.Field.id,
                 Campaign.Field.name,
-                Campaign.Field.status
-            ])
+                Campaign.Field.status,
+                Campaign.Field.effective_status
+            ], params={
+                'effective_status': ['ACTIVE', 'PAUSED'],
+                'limit': 1000
+            })
             for campaign in campaigns:
                 campaign_name = campaign[Campaign.Field.name]
                 if keyword1 in campaign_name or keyword2 in campaign_name:
@@ -283,11 +287,12 @@ async def get_facebook_ads_performance_from_graph_api() -> list:
                     Campaign.Field.name,
                     Campaign.Field.status,
                     Campaign.Field.effective_status
-                ],
-                params={
-                    'effective_status': ['ACTIVE']
+                ], params={
+                    'effective_status': ['ACTIVE'],
+                    'limit': 1000
                 }
             )
+            print(f"  Found {len(campaigns)} campaigns in account {account['account_id']}")
             for campaign in campaigns:
                 campaign_name = campaign[Campaign.Field.name]
                 
