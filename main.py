@@ -202,9 +202,11 @@ async def scheduler():
     while True:
         # Get Brazilia time (UTC-3)
         now = datetime.now(timezone(timedelta(hours=-3)))
-        if  now.hour == 19 and now.minute == 0:  # Brazil time 7:00 PM and wednesday
-            await main(isStarted=False)
-            alert.send_country_message()
+        if  now.minute == 0:  
+            await facebook.get_facebook_ads_performance_from_graph_api()
+            if now.hour == 19:  # Brazil time 7:00 PM and wednesday
+                await main(isStarted=False)
+                alert.send_country_message()
             await asyncio.sleep(60)
         else:
             await asyncio.sleep(1)

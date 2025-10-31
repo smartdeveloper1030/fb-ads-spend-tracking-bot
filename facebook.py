@@ -292,7 +292,7 @@ async def get_facebook_ads_performance_from_graph_api() -> list:
                     'limit': 1000
                 }
             )
-            print(f"  Found {len(campaigns)} campaigns in account {account['account_id']}")
+            # print(f"  Found {len(campaigns)} campaigns in account {account['account_id']}")
             for campaign in campaigns:
                 campaign_name = campaign[Campaign.Field.name]
                 
