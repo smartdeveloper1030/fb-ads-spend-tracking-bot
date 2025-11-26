@@ -200,10 +200,14 @@ async def scheduler():
     await main(isStarted=True)
     # alert.send_country_message()
     while True:
-        # Get Brazilia time (UTC-3)
         now = datetime.now(timezone(timedelta(hours=-3)))
-        if  now.hour == 19 and now.minute == 0:  # Brazil time 7:00 PM and wednesday
-            await main(isStarted=False)
+
+        if now.hour == 19 and now.minute == 0:  
+            state = True
+            if now.weekday() in (0, 3):
+                state = False
+
+            await main(isStarted=state)
             alert.send_country_message()
             await asyncio.sleep(60)
         else:
